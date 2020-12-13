@@ -1,0 +1,99 @@
+- hosts: all
+  tasks:
+  - name: install dependencies
+    yum:
+     name:
+       - libselinux-python
+       - libsemanage-python
+       - firewalld
+     state: installed
+
+  - name: Copy MySQL Configuration
+    copy:
+      src: files/my.cnf
+      dest: /etc/my.cnf
+
+  - service: name=mariadb state=started enabled=yes
+  - service: name=firewalld state=started enabled=yes
+
+  - name: Configure Firewall
+    firewalld:
+      port: 3306/tcp
+      immediate: yes
+      state: enabled
+      permanent: yes
+      zone: public
+
+    # DATABASE CONFIGURATION - TARGET ONLY THE DB
+- hosts: lamp-db
+  become: yes
+  tasks:
+  - name:
+    yum:
+      name:
+       - MySQL-python
+       - mariadb-server
+      state: installed
+
+  - name: Create Application Database
+    mysql_db: 
+       name={{ dbname }} 
+       state=present
+  - name: Create Application DB User
+    mysql_user: 
+       name: "{{ dbuser }}" 
+       password: "{{ dbpassword }}" 
+       priv: '*.*:ALL' 
+       host: '172.20.1.100'
+  - name: Move db-load-script to db host
+    copy:
+     src: files/db-load-script.sql
+     dest: /tmp/db-load-script.sql
+
+  - name: Load Inventory Data
+    shell: mysql -f < /tmp/db-load-script.sql
+
+       #CONFIGURE WEB SERVER
+- hosts: lamp-web
+  become: yes
+  tasks:
+  - name:
+    yum:
+      - httpd
+      - php
+      - php-mysql
+      - git
+  - service: name=firewalld state=started enabled=yes
+
+  - name: Firewall Configuration
+    firewalld:
+     port: "{{ httpd_port }}"
+     immediate: yes
+     state: enabled
+     permanent: yes
+
+  - name: Set index.php as the default page
+    tags: "Set index.php as the default page"
+    replace:
+      path: /etc/httpd/conf/httpd.conf
+      regexp: 'DirectoryIndex index.html'
+      replace: 'DirectoryIndex index.php'
+
+
+    - name: http service state
+      service: name=httpd state=started enabled=yes
+
+    - name: Copy the code from repository
+      git: repo={{ repository }} dest=/var/www/html/  force=yes
+
+    - name: Creates the index.php file
+      copy: src=files/index.php dest=/var/www/html/index.php force=yes
+   
+
+#This is an attempt to automate php with variables
+
+    - name: Direct php file
+      replace:
+        path: /var/www/html/index.php
+        regexp: "mysqli_connect('instanceIP', 'dbuser', 'dbpassword', 'dbname');"
+        replace: "mysqli_connect('{{ instanceIP }}', '{{ dbuser }}', '{{ dbpassword '}}, '{{ dbname }}');"

@@ -1,0 +1,5 @@
+[db_server]
+mysql ansible_host=172.20.1.1 ansible_user=mariadb ansible_ssh_private_key_file=mariadb  mysqlservice=mysqld mysql_port=3306 dbname=luci dbuser=aurond
+
+[web_server]
+web ansible_host=172.20.1.2 ansible_user=webapp httpd_port=80 repository=https://github.com/Uploadyourstuff.git instanceIP=172.168.2.1 dbuser=aurond dbpassword=lucifer dbname=luci
